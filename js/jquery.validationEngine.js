@@ -1,5 +1,5 @@
 /*
- * Inline Form Validation Engine 2.6.3, jQuery plugin
+ * Inline Form Validation Engine 2.6.2, jQuery plugin
  *
  * Copyright(c) 2010, Cedric Dugas
  * http://www.position-absolute.com
@@ -7,7 +7,7 @@
  * 2.0 Rewrite by Olivier Refalo
  * http://www.crionics.com
  *
- * Date Format options added by Don Walter
+ * Added padded zeros to returned date, Don Walter
  * http://www.don-walter.com
  *
  * Form validation engine allowing custom regex rules to be added.
@@ -449,7 +449,11 @@
 					return options.onBeforeAjaxFormValidation(form, options);
 				},
 				error: function(data, transport) {
-					methods._ajaxError(data, transport);
+					if (options.onFailure) {
+						options.onFailure(data, transport);
+					} else {
+						methods._ajaxError(data, transport);
+					}
 				},
 				success: function(json) {
 					if ((dataType == "json") && (json !== true)) {
@@ -707,7 +711,10 @@
 				}
 			}
 			// If the rules required is not added, an empty field is not validated
-			if(!required && !(field.val()) && field.val().length < 1) options.isError = false;
+			//the 3rd condition is added so that even empty password fields should be equal
+			//otherwise if one is filled and another left empty, the "equal" condition would fail
+			//which does not make any sense
+			if(!required && !(field.val()) && field.val().length < 1 && rules.indexOf("equals") < 0) options.isError = false;
 
 			// Hack for radio/checkbox group button, the validation go into the
 			// first radio/checkbox of the group
@@ -1146,7 +1153,7 @@
 		_past: function(form, field, rules, i, options) {
 
 			var p=rules[i + 1];
-			var fieldAlt = $(form.find("input[name='" + p.replace(/^#+/, '') + "']"));
+			var fieldAlt = $(form.find("*[name='" + p.replace(/^#+/, '') + "']"));
 			var pdate;
 
 			if (p.toLowerCase() == "now") {
@@ -1154,16 +1161,16 @@
 			} else if (undefined != fieldAlt.val()) {
 				if (fieldAlt.is(":disabled"))
 					return;
-				pdate = methods._parseDate(fieldAlt.val(), options);
+				pdate = methods._parseDate(fieldAlt.val());
 			} else {
-				pdate = methods._parseDate(p, options);
+				pdate = methods._parseDate(p);
 			}
-			var vdate = methods._parseDate(field.val(), options);
+			var vdate = methods._parseDate(field.val());
 
 			if (vdate > pdate ) {
 				var rule = options.allrules.past;
-				if (rule.alertText2) return rule.alertText + methods._dateToString(pdate, options) + rule.alertText2;
-				return rule.alertText + methods._dateToString(pdate, options);
+				if (rule.alertText2) return rule.alertText + methods._dateToString(pdate) + rule.alertText2;
+				return rule.alertText + methods._dateToString(pdate);
 			}
 		},
 		/**
@@ -1179,7 +1186,7 @@
 		_future: function(form, field, rules, i, options) {
 
 			var p=rules[i + 1];
-			var fieldAlt = $(form.find("input[name='" + p.replace(/^#+/, '') + "']"));
+			var fieldAlt = $(form.find("*[name='" + p.replace(/^#+/, '') + "']"));
 			var pdate;
 
 			if (p.toLowerCase() == "now") {
@@ -1187,17 +1194,17 @@
 			} else if (undefined != fieldAlt.val()) {
 				if (fieldAlt.is(":disabled"))
 					return;
-				pdate = methods._parseDate(fieldAlt.val(), options);
+				pdate = methods._parseDate(fieldAlt.val());
 			} else {
-				pdate = methods._parseDate(p, options);
+				pdate = methods._parseDate(p);
 			}
-			var vdate = methods._parseDate(field.val(), options);
+			var vdate = methods._parseDate(field.val());
 
 			if (vdate < pdate ) {
 				var rule = options.allrules.future;
 				if (rule.alertText2)
-					return rule.alertText + methods._dateToString(pdate, options) + rule.alertText2;
-				return rule.alertText + methods._dateToString(pdate, options);
+					return rule.alertText + methods._dateToString(pdate) + rule.alertText2;
+				return rule.alertText + methods._dateToString(pdate);
 			}
 		},
 		/**
@@ -1407,7 +1414,11 @@
 					 options: options,
 					 beforeSend: function() {},
 					 error: function(data, transport) {
-						 methods._ajaxError(data, transport);
+						if (options.onFailure) {
+							options.onFailure(data, transport);
+						} else {
+							methods._ajaxError(data, transport);
+						}
 					 },
 					 success: function(json) {
 
@@ -1491,22 +1502,28 @@
 		*
 		* @param {Object} date
 		*/
-		_dateToString: function(date, options) {
-			return options.dateFormat.replace('MM', date.getMonth()+1).replace('DD', date.getDate()).replace('YYYY', date.getFullYear());
+		_dateToString: function(date) {
+			var year = '00'+date.getFullYear();
+			var month = '0'+(date.getMonth()+1);
+			var date = '0'+date.getDate();
+
+			return year.substring(year.length-4, year.length)+"-"+month.substring(month.length-2, month.length)+"-"+date.substring(date.length-2, date.length);
 		},
 		/**
 		* Parses an ISO date
 		* @param {String} d
 		*/
-		_parseDate: function(d, options) {
-			if (d.length) {
-				var d = new Date(d);
-				return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-			} else {
-				return d;
-			}
-		},
+		_parseDate: function(d) {
 
+			var dateParts = d.split("-");
+			if(dateParts==d)
+				dateParts = d.split("/");
+			if(dateParts==d) {
+				dateParts = d.split(".");
+				return new Date(dateParts[2], (dateParts[1] - 1), dateParts[0]);
+			}
+			return new Date(dateParts[0], (dateParts[1] - 1) ,dateParts[2]);
+		},
 		/**
 		* Builds or updates a prompt with the given information
 		*
@@ -2059,9 +2076,7 @@
 	 // Custom ID uses suffix
 	 useSuffix: "",
 	 // Only show one message per error prompt
-	 showOneMessage: false,
-	 // Set the date format, using "YYYY" for year, MM" for months, and "DD" for days, can use any delimiter
-	 dateFormat: 'YYYY-MM-DD'
+	 showOneMessage: false
 	}};
 	$(function(){$.validationEngine.defaults.promptPosition = methods.isRTL()?'topLeft':"topRight"});
 })(jQuery);
